@@ -1,0 +1,24 @@
+# config.yaml
+
+# 日志级别: debug, info, warn, error
+log_level: "info"
+
+# 警报规则配置
+rules:
+  # 流量阈值 (单位: MB)
+  traffic_threshold_mb: 1024
+  # 时间窗口 (单位: 分钟)，在此时间段内流量超过阈值则报警
+  time_window_minutes: 5
+  # 规则检查间隔 (单位: 秒)
+  check_interval_seconds: 30
+  # 对于同一个进程，触发一次警报后的冷却时间 (单位: 分钟)
+  alert_cooldown_minutes: 10
+
+# Telegram 警报器配置
+alerter:
+  telegram:
+    enabled: true
+    # 在这里填入你的 Telegram Bot Token
+    bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
+    # 在这里填入你的 Telegram Chat ID
+    chat_id: "YOUR_TELEGRAM_CHAT_ID"
