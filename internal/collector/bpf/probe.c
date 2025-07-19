@@ -1,74 +1,42 @@
-// 文件路径: internal/collector/bpf/probe.c
-
+// internal/collector/bpf/probe.c
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 
-#define TASK_COMM_LEN 16
-
-// 定义发送给用户空间Go程序的数据结构
-struct traffic_event
-{
-    u64 bytes;                // 字节数
-    u32 pid;                  // 进程ID
-    char comm[TASK_COMM_LEN]; // 进程名
-    bool is_tx;               // 是否是发送流量 (true=TX, false=RX)
+// 定义发送给用户空间的数据结构
+struct traffic_event {
+    u32 pid;
+    u64 len;
 };
 
-// 定义一个BPF_MAP_TYPE_PERF_EVENT_ARRAY类型的BPF映射
-// 这是从内核空间向用户空间发送事件的标准方式
-struct
-{
+// 使用 BPF_MAP_TYPE_PERF_EVENT_ARRAY 定义一个 perf buffer map
+// 用于将事件从内核空间发送到用户空间
+struct {
     __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
     __uint(key_size, sizeof(u32));
     __uint(value_size, sizeof(u32));
 } events SEC(".maps");
 
-// === 发送流量 (TX) 探针 ===
-SEC("kprobe/net_dev_start_xmit")
-int BPF_KPROBE(probe_tx, struct sk_buff *skb)
-{
-    // 获取当前进程的ID和名称
-    u64 id = bpf_get_current_pid_tgid();
-    u32 pid = id >> 32;
-
-    // 实例化一个事件结构体
+// SEC("tp/net/net_dev_xmit") 将此函数附加到 net_dev_xmit tracepoint
+// 当内核将一个数据包交给网络设备发送时，此 tracepoint 会被触发
+SEC("tp/net/net_dev_xmit")
+int handle_net_dev_xmit(struct trace_event_raw_net_dev_xmit *ctx) {
+    // 创建一个事件结构体实例
     struct traffic_event event = {};
 
-    // 填充数据
-    event.pid = pid;
-    event.bytes = skb->len;
-    event.is_tx = true;
-    bpf_get_current_comm(&event.comm, sizeof(event.comm));
+    // 获取当前进程的 PID
+    // bpf_get_current_pid_tgid() 返回一个64位数，高32位是 TGID (线程组ID, 即PID)，低32位是 TID (线程ID)
+    u64 id = bpf_get_current_pid_tgid();
+    event.pid = id >> 32;
 
-    // 通过 perf event array 将事件发送到用户空间
+    // 从 tracepoint 上下文中获取数据包的长度
+    event.len = (u64)ctx->len;
+
+    // 将事件数据提交到 perf buffer
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
 
     return 0;
 }
 
-// === 接收流量 (RX) 探针 ===
-SEC("kprobe/netif_receive_skb")
-int BPF_KPROBE(probe_rx, struct sk_buff *skb)
-{
-    // 获取当前进程的ID和名称
-    u64 id = bpf_get_current_pid_tgid();
-    u32 pid = id >> 32;
-
-    // 实例化一个事件结构体
-    struct traffic_event event = {};
-
-    // 填充数据
-    event.pid = pid;
-    event.bytes = skb->len;
-    event.is_tx = false; // 标记为接收
-    bpf_get_current_comm(&event.comm, sizeof(event.comm));
-
-    // 发送事件
-    bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
-
-    return 0;
-}
-
-// BPF程序必须有一个许可证
+// 许可证声明，对于 eBPF 程序是必需的
 char LICENSE[] SEC("license") = "GPL";
