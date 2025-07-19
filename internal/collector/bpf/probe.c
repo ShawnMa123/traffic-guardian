@@ -1,4 +1,6 @@
 // internal/collector/bpf/probe.c
+
+// 唯一的 include，由 bpf2go 根据系统 BTF 自动生成
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>

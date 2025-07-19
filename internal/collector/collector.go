@@ -13,7 +13,8 @@ import (
 	"github.com/cilium/ebpf/perf"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang bpf ./bpf/probe.c -- -I./bpf/headers
+// 【最终修正】使用标准的 bpf2go 命令。它会自动找到 /sys/kernel/btf/vmlinux 并生成 vmlinux.h
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -target bpf bpf ./bpf/probe.c -- -O2 -g -Wall
 
 // TrafficEvent mirrors the struct in probe.c
 type TrafficEvent struct {
